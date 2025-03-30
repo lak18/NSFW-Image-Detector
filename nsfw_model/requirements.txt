@@ -1,0 +1,5 @@
+tensorflow
+#tensorflow_macos
+tensorflow-hub
+pillow
+numpy
