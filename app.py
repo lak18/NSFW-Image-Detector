@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 # Configure upload folder
 UPLOAD_FOLDER = 'uploads'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif','jiff'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'jiff'}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
@@ -23,61 +23,53 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def is_nsfw(results):
-    # Define NSFW thresholds 
     nsfw_categories = ['porn', 'hentai', 'sexy']
-    nsfw_threshold = 0.5  # 50% confidence
-
+    nsfw_threshold = 0.5
     for category in nsfw_categories:
-        if results[category] > nsfw_threshold:
+        if results.get(category, 0) > nsfw_threshold:
             return True
     return False
 
-@app.route('/', methods=['GET', 'POST'])
-def upload_file():
-    if request.method == 'POST':
-        # Check if the post request has the file part
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file part'})
-        
-        file = request.files['file']
-        
-        # If no file is selected
-        if file.filename == '':
-            return jsonify({'error': 'No selected file'})
-        
-        # If file is allowed
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
-            
-            # Predict NSFW content
-            try:
-                result = predict.classify(model, filepath)
-                # Remove the file after processing
-                os.remove(filepath)
-                
-                # Extract the first (and only) result
-                image_result = list(result.values())[0]
-                
-                # Find the highest rated category
-                highest_category = max(image_result, key=image_result.get)
-                highest_percentage = f"{image_result[highest_category]*100:.2f}%"
-                
-                # Determine if image is NSFW
-                nsfw_status = "It is a NSFW image" if is_nsfw(image_result) else "It is not a NSFW image"
-                
-                return jsonify({
-                    'highest_category': highest_category,
-                    'highest_percentage': highest_percentage,
-                    'nsfw_status': nsfw_status,
-                    'categories': image_result
-                })
-            
-            except Exception as e:
-                return jsonify({'error': str(e)})
-    
+@app.route('/', methods=['GET'])
+def index():
     return render_template('index.html')
 
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+
+    file = request.files['file']
+
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+
+        try:
+            result = predict.classify(model, filepath)
+            os.remove(filepath)
+
+            image_result = list(result.values())[0]
+            highest_category = max(image_result, key=image_result.get)
+            highest_percentage = f"{image_result[highest_category]*100:.2f}%"
+            nsfw_status = "It is a NSFW image" if is_nsfw(image_result) else "It is not a NSFW image"
+
+            return jsonify({
+                'highest_category': highest_category,
+                'highest_percentage': highest_percentage,
+                'nsfw_status': nsfw_status,
+                'categories': image_result
+            })
+
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    return jsonify({'error': 'Invalid file type'}), 400
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
