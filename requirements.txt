@@ -1,0 +1,11 @@
+flask
+Werkzeug
+tensorflow
+keras 
+numpy 
+nsfw-detector
+pillow
+pandas
+scikit-learn
+matplotlib
+seaborn
